@@ -41,14 +41,20 @@ sys_wait(void)
 uint64
 sys_sbrk(void)
 {
-  int addr;
+  uint64 addr;
   int n;
 
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  // printf("sbrk: %d\n", n);
+  if(n >= 0) {
+    myproc()->sz = addr + n;
+  } else {
+    if(growproc(n) < 0)
+      return -1;
+  }
+  // printf("addr sbrk size: %p, %d, %p\n", addr, n, addr + n);
   return addr;
 }
 

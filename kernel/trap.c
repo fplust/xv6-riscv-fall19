@@ -50,7 +50,8 @@ usertrap(void)
   // save user program counter.
   p->tf->epc = r_sepc();
   
-  if(r_scause() == 8){
+  int scause = r_scause();
+  if(scause == 8){
     // system call
 
     if(p->killed)
@@ -67,6 +68,34 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(scause == 13 || scause == 15) {
+    uint64 va = r_stval();
+    uint64 stackbase = p->tf->sp - PGSIZE;
+    if(va >= p->sz) {
+      // printf("va out of sz: %p, %p\n", va, p->sz);
+      printf("usertrap(): page fault %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    } else if(va <= stackbase) {
+      printf("usertrap(): stack overflow %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    } else {
+      // printf("page fault: %p, size: %p\n", r_stval(), p->sz);
+      // vmprint(p->pagetable);
+      uint64 a = PGROUNDDOWN(va);
+      // printf("%p, %p\n", va, a);
+      char *mem = kalloc();
+      if(mem != 0) {
+        memset(mem, 0, PGSIZE);
+        mappages(p->pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U);
+        // vmprint(p->pagetable);
+      } else {
+        printf("usertrap(): out of memory %p pid=%d\n", r_scause(), p->pid);
+        printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+        p->killed = 1;
+      }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

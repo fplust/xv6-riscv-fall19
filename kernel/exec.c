@@ -104,6 +104,9 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
+
+  // print pagetable of process
+  vmprint(pagetable);
     
   // Commit to the user image.
   oldpagetable = p->pagetable;
