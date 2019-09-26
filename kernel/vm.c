@@ -118,21 +118,10 @@ walkaddr(pagetable_t pagetable, uint64 va)
   if((*pte & PTE_V) == 0){
     // printf("walkaddr: %p\n", va);
     // vmprint(pagetable);
-    struct proc *p = myproc();
-    if(va >= p->sz) {
-      // printf("va out of sz: %p, %p\n", va, p->sz);
+    if(page_fault(va) < 0) {
       return 0;
     } else {
-      uint64 a = PGROUNDDOWN(va);
-      // printf("%p, %p\n", va, a);
-      char *mem = kalloc();
-      if(mem == 0) {
-        return 0;
-      } else {
-        memset(mem, 0, PGSIZE);
-        mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U);
-        pte = walk(pagetable, va, 0);
-      }
+      pte = walk(pagetable, va, 0);
     }
   }
   if((*pte & PTE_U) == 0)
@@ -516,4 +505,35 @@ void vmprint(pagetable_t pt) {
   printf("page table %p\n", pt);
   // there are 2^9 = 512 PTEs in a page table.
   vmprint_level(pt, 1);
+}
+
+int page_fault(uint64 va) {
+  struct proc *p = myproc();
+  uint64 stackbase = p->tf->sp - PGSIZE;
+  if(va >= p->sz) {
+    // printf("va out of sz: %p, %p\n", va, p->sz);
+    printf("usertrap(): page fault %p pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    return -1;
+  } else if(va <= stackbase) {
+    printf("usertrap(): stack overflow %p pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    return -1;
+  } else {
+    // printf("page fault: %p, size: %p\n", r_stval(), p->sz);
+    // vmprint(p->pagetable);
+    uint64 a = PGROUNDDOWN(va);
+    // printf("%p, %p\n", va, a);
+    char *mem = kalloc();
+    if(mem != 0) {
+      memset(mem, 0, PGSIZE);
+      mappages(p->pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U);
+      // vmprint(p->pagetable);
+      return 1;
+    } else {
+      printf("usertrap(): out of memory %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      return -1;
+    }
+  }
 }
